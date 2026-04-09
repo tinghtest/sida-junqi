@@ -2,601 +2,705 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>四国大战</title>
+<title>四国大战 v5</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:"Microsoft YaHei","SimHei",sans-serif;background:#0a0e14;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:6px;color:#c9d1d9;user-select:none}
-h1{font-size:20px;color:#ffd700;letter-spacing:5px;margin:4px 0}
-.bar{display:flex;gap:6px;margin:4px 0;flex-wrap:wrap;justify-content:center}
-.ptag{padding:3px 12px;border-radius:12px;font-size:11px;font-weight:bold;color:#fff;opacity:.35;transition:.2s}
-.ptag.on{opacity:1;box-shadow:0 0 8px currentColor;transform:scale(1.1)}
-.btn{padding:6px 16px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;color:#fff;background:#238636;transition:.15s}
-.btn:hover{filter:brightness(1.2);transform:translateY(-1px)}
+body{font-family:"Microsoft YaHei",sans-serif;background:#0d1117;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:10px;color:#c9d1d9}
+h1{font-size:22px;color:#ffd700;margin:8px 0;text-align:center}
+.ctrl{display:flex;gap:10px;margin:8px 0}
+.btn{padding:8px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:bold;color:#fff;background:#238636;transition:.2s}
+.btn:hover{filter:brightness(1.15)}
 .btn-r{background:#da3633}
-#msg{font-size:12px;min-height:18px;color:#8b949e;margin:2px 0}
-canvas{border:2px solid #30363d;border-radius:4px;cursor:pointer;background:#0d1a0d}
-#tips{font-size:10px;color:#484f58;margin:2px 0;text-align:center;max-width:720px}
+#msg{font-size:14px;color:#8b949e;margin:6px 0;min-height:20px}
+canvas{border:3px solid #30363d;border-radius:8px;background:#161b22}
+.tips{font-size:12px;color:#6e7681;margin-top:8px;text-align:center}
 </style>
 </head>
 <body>
-<h1>⚔ 四国大战 ⚔</h1>
-<div class="bar" id="tags"></div>
-<div class="bar">
+<h1>⚔ 四国大战 v5 ⚔</h1>
+<div class="ctrl">
   <button class="btn" onclick="startGame()">🎮 开局</button>
   <button class="btn btn-r" onclick="resetGame()">🔄 重置</button>
 </div>
-<div id="msg">点击「开局」开始游戏</div>
-<canvas id="cv"></canvas>
-<div id="tips">四国军棋 · 红蓝 vs 绿黄 · 司令吃军长、工兵排雷、炸弹同归 · 扛旗即胜</div>
+<div id="msg">点击「开局」开始</div>
+<canvas id="board"></canvas>
+<div class="tips">红蓝 vs 黄绿 · 司令>军长>师长>旅长>团长>营长>连长>排长>工兵 · 炸弹同归 · 工兵排雷 · 扛旗获胜</div>
+
 <script>
-// ============ 画布设置 ============
-const U = 34;      // 单元格间距(px)
-const PAD = 10;    // 边距
-const W = 720, H = 720;
+// ===== 基本配置 =====
+const U = 35;           // 格子间距
+const W = 750, H = 750; // 画布大小
 const CX = W/2, CY = H/2;
-const cv = document.getElementById('cv');
-cv.width = W; cv.height = H;
-const ctx = cv.getContext('2d');
 
-// ============ 配色 ============
-const PC  = ['#e5534b','#3fb950','#58a6ff','#d29922'];  // 亮色
-const PD  = ['#6b1010','#0d4010','#0d2d55','#4a2800'];  // 暗色
-const PN  = ['红','绿','蓝','黄'];
-const PE  = ['🔴','🟢','🔵','🟡'];
-const RN  = ['炸','雷','工','排','连','营','团','旅','师','军','司','旗'];
-const TEAM = [0,1,0,1]; // 红蓝=联盟A，绿黄=联盟B
+const canvas = document.getElementById('board');
+canvas.width = W; canvas.height = H;
+const ctx = canvas.getContext('2d');
 
-// ============ 棋子配置 ============
-// rank: 2~0=工兵, 3=排长, 4=连长, 5=营长, 6=团长, 7=旅长,
-//       8=师长, 9=军长, 10=司令, 11=地雷, 0=炸弹
-// 每人25子
-const INIT_COUNTS = [
-  [10,1], // 司令x1
-  [9,1],  // 军长x1
-  [8,2],  // 师长x2
-  [7,2],  // 旅长x2
-  [6,2],  // 团长x2
-  [5,2],  // 营长x2
-  [4,3],  // 连长x3
-  [3,3],  // 排长x3
-  [2,3],  // 工兵x3
-  [0,2],  // 炸弹x2
-  [1,3],  // 地雷x3
-  [11,1], // 军旗x1
-]; // 总计: 1+1+2+2+2+2+3+3+3+2+3+1 = 25
+// ===== 颜色配置 =====
+const COLORS = ['#e53935','#4caf50','#2196f3','#ffeb3b']; // 红绿蓝黄
+const DARKS  = ['#b71c1c','#2e7d32','#1565c0','#f9a825'];
+const NAMES  = ['红','绿','蓝','黄'];
+const EMOJI  = ['🔴','🟢','🔵','🟡'];
+const TEAMS  = [0,1,0,1]; // 红-蓝联盟 vs 绿-黄联盟
 
-// ============ 棋盘配置 ============
-const CAMPS_POS  = [[1,1],[1,3],[2,2],[3,1],[3,3]]; // 行营(菱形安全区)
-const HQ_POS     = [[4,1],[4,3]];                   // 大本营(军旗位)
-const RAIL_COLS  = [0, 4];  // 铁路列
-const RAIL_ROWS  = [0, 4];  // 铁路行
+// ===== 棋子 =====
+// rank: 大=>强
+// 10=司令,9=军长,8=师长,7=旅长,6=团长,5=营长,4=连长,3=排长,2=工兵
+// 0=炸弹,1=地雷,11=军旗(特殊)
+const PIECE_NAMES = ['炸','雷','工','排','连','营','团','旅','师','军','司','旗'];
+const PIECE_CONFIG = [
+  {rank:10, name:'司', count:1},
+  {rank:9,  name:'军', count:1},
+  {rank:8,  name:'师', count:2},
+  {rank:7,  name:'旅', count:2},
+  {rank:6,  name:'团', count:2},
+  {rank:5,  name:'营', count:2},
+  {rank:4,  name:'连', count:3},
+  {rank:3,  name:'排', count:3},
+  {rank:2,  name:'工', count:3},
+  {rank:0,  name:'炸', count:2},
+  {rank:1,  name:'雷', count:3},
+  {rank:11, name:'旗', count:1},
+]; // 每人25子
 
-// ============ 坐标系统 ============
-// pos(g, row, col) → [px, py]
-// row 0 = 靠近中心, row 4 = 远端
-// col 0 = 外边, col 4 = 内边
-function pos(g, row, col){
-  const x = (col - 2) * U;
-  const y = (0.8 + row) * U;
-  const rot = (r, c) => {
-    const cx=CX,cy=CY;
-    if(g===0) return [cx+r, cy+c];       // 南(原位)
-    if(g===1) return [cx-c, cy+r];       // 东(逆时针90°)
-    if(g===2) return [cx-r, cy-c];       // 北(180°)
-    return         [cx+c, cy-r];         // 西(顺时针90°)
-  };
-  return rot(x, y);
-}
+// ===== 棋盘布局 =====
+// 每个玩家区域: 5行6列 (标准四国军棋布局)
+// row 0-4, col 0-5
+// 其中 col 0 和 col 5 是铁路线
+// row 4 是大本营行 (军旗位)
 
-// ============ 构建棋盘节点 ============
-const cells = [];
-const cellMap = {};
+const CAMPS = [[1,1],[1,3],[2,2],[3,1],[3,3]]; // 行营位置(row,col) - 在col 1-4范围内
+const HQS   = [[4,1],[4,3]];                   // 大本营(军旗位)
+const RAIL_COL = [0, 5];  // 铁路列
+const RAIL_ROW = [0];     // 铁路行(只有row0是横向铁路)
 
-function mk(g, row, col, type){
-  const id = g*100 + row*10 + col;
-  if(id in cellMap) return;
-  const [px, py] = pos(g, row, col);
-  const cell = {id, g, row, col, type, px, py};
-  cells.push(cell);
-  cellMap[id] = cell;
-}
+// ===== 坐标计算 =====
+// 四个玩家的位置:
+// player 0 (红): 下方 (南)
+// player 1 (绿): 右方 (东)
+// player 2 (蓝): 上方 (北)
+// player 3 (黄): 左方 (西)
 
-// 每个玩家 5x5 网格
-for(let g=0; g<4; g++){
-  for(let r=0; r<5; r++){
-    for(let c=0; c<5; c++){
-      let type = 'S'; // S=普通
-      if(CAMPS_POS.some(([cr,cc])=>cr===r && cc===c)) type = 'C'; // Camp
-      if(HQ_POS.some(([hr,hc])=>hr===r && hc===c))    type = 'H'; // HQ
-      mk(g, r, c, type);
-    }
+// 每个玩家区域的基准点(左上角)
+function getZoneOrigin(player) {
+  // 标准四国军棋: 每个区域6列5行
+  // 南: 基准点在左下, 向上延伸
+  // 北: 基准点在右上, 向下延伸  
+  // 东: 基准点在右下, 向左延伸
+  // 西: 基准点在左上, 向右延伸
+  const zoneW = 6 * U;  // 区域宽度(6列)
+  const zoneH = 5 * U;  // 区域高度(5行)
+  const gap = U * 0.5;  // 区域间隙
+  
+  switch(player) {
+    case 0: // 南(下): 从下方开始，向上布局
+      return { x: CX - zoneW/2, y: CY + gap, dir: 'up' };
+    case 1: // 东(右): 从右方开始，向左布局
+      return { x: CX + gap, y: CY + zoneH/2, dir: 'left' };
+    case 2: // 北(上): 从上方开始，向下布局
+      return { x: CX + zoneW/2, y: CY - gap, dir: 'down' };
+    case 3: // 西(左): 从左方开始，向右布局
+      return { x: CX - gap - zoneW, y: CY - zoneH/2, dir: 'right' };
   }
 }
 
-// 中心连接点
-const CENTER_ID = 999;
-const centerCell = {id: CENTER_ID, g:-1, row:-1, col:-1, type:'X', px:CX, py:CY};
-cells.push(centerCell);
-cellMap[CENTER_ID] = centerCell;
-
-// ============ 邻接表 ============
-const adj = {};
-function link(a, b){
-  if(!adj[a]) adj[a] = [];
-  if(!adj[b]) adj[b] = [];
-  if(!adj[a].includes(b)) adj[a].push(b);
-  if(!adj[b].includes(a)) adj[b].push(a);
-}
-function getId(g,r,c){ return g*100+r*10+c; }
-
-// --- Zone内部普通连接 ---
-for(const cl of cells){
-  if(cl.g < 0 || cl.g >= 4) continue;
-  const {g, row, col} = cl;
-  if(col < 4) link(getId(g,row,col), getId(g,row,col+1));
-  if(row < 4) link(getId(g,row,col), getId(g,row+1,col));
-}
-
-// --- 铁路连接(外列) ---
-for(let g=0; g<4; g++){
-  // 铁路列(col 0和4): 上下全通
-  for(let r=0; r<4; r++){
-    link(getId(g,r,0), getId(g,r+1,0));
-    link(getId(g,r,4), getId(g,r+1,4));
+// 获取某个玩家某个格子的像素坐标
+function getCellPos(player, row, col) {
+  const origin = getZoneOrigin(player);
+  let x, y;
+  
+  // 基础坐标(未旋转)
+  const baseX = col * U;
+  const baseY = row * U;
+  
+  switch(origin.dir) {
+    case 'up':    // 南: x正向, y反向(row0在最远端/下方)
+      x = origin.x + baseX;
+      y = origin.y + zoneH - baseY;  // row0在最下
+      break;
+    case 'down':  // 北: x反向, y正向(row0在最远端/上方)
+      x = origin.x + zoneW - baseX;
+      y = origin.y + baseY;
+      break;
+    case 'left':  // 东: y正向变成x负向, x正向变成y正向
+      x = origin.x - baseY;  // row变成x的负方向
+      y = origin.y - zoneW/2 + baseX;  // col变成y
+      break;
+    case 'right': // 西: y正向变成x正向, x正向变成y负向
+      x = origin.x + baseY;
+      y = origin.y + zoneW/2 - baseX;
+      break;
   }
-  // 铁路行(row 0和4): 左右全通
-  for(let c=0; c<4; c++){
-    link(getId(g,0,c), getId(g,0,c+1));
-    link(getId(g,4,c), getId(g,4,c+1));
-  }
+  
+  return { x, y };
 }
 
-// --- 行营对角连接 ---
-for(let g=0; g<4; g++){
-  for(const [cr,cc] of CAMPS_POS){
-    const id = getId(g,cr,cc);
-    for(const [dr,dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]){
-      const nr=cr+dr, nc=cc+dc;
-      if(nr>=0&&nr<5&&nc>=0&&nc<5)
-        link(id, getId(g,nr,nc));
-    }
-  }
-}
+const zoneW = 6 * U;
+const zoneH = 5 * U;
 
-// --- 角落连接(相邻玩家zone的row0边界) ---
-// 变换函数: 获取玩家g zone内(row,col)的实际坐标
-function zPos(g, row, col){
-  return pos(g, row, col);
-}
-// 判断两个坐标是否相同(误差内)
-function samePos([x1,y1],[x2,y2]){ return Math.abs(x1-x2)<2 && Math.abs(y1-y2)<2; }
-
-// 建立坐标→节点id的映射
-const posToIds = {};
-for(const cl of cells){
-  if(cl.g < 0 || cl.g >= 4) continue;
-  const key = cl.px.toFixed(0)+','+cl.py.toFixed(0);
-  if(!posToIds[key]) posToIds[key] = [];
-  posToIds[key].push(cl.id);
-}
-function findCellByPos(g, row, col){
-  const [px,py] = pos(g, row, col);
-  const key = px.toFixed(0)+','+py.toFixed(0);
-  const ids = posToIds[key];
-  return ids ? ids[0] : -1;
-}
-
-// 四个角连接:
-// 南(g0)col0 ↔ 西(g3)col0 的 row0 端点
-// 南(g0)col4 ↔ 东(g1)col0 的 row0 端点
-// 北(g2)col0 ↔ 东(g1)col4 的 row0 端点
-// 北(g2)col4 ↔ 西(g3)col4 的 row0 端点
-const cornerPairs = [
-  [0, 0,0,  3,0,0],  // 南col0 ↔ 西col0
-  [0, 0,4,  1,0,0],  // 南col4 ↔ 东col0
-  [2, 0,0,  1,0,4],  // 北col0 ↔ 东col4
-  [2, 0,4,  3,0,4],  // 北col4 ↔ 西col4
-];
-for(const [g1,r1,c1,g2,r2,c2] of cornerPairs){
-  const id1 = findCellByPos(g1, r1, c1);
-  const id2 = findCellByPos(g2, r2, c2);
-  if(id1>0 && id2>0) link(id1, id2);
-}
-
-// --- 中心连接 ---
-// 四个玩家的 row0,col2(中间) 连接到中心
-for(let g=0; g<4; g++){
-  const cid = findCellByPos(g, 0, 2);
-  if(cid>0) link(cid, CENTER_ID);
-}
-
-// ============ 铁路移动工具 ============
-// 判断两个相邻格是否为铁路(同行外列 or 同列外行)
-function isRailAdj(id1, id2){
-  const c1=cellMap[id1], c2=cellMap[id2];
-  if(!c1||!c2||c1.g<0||c2.g<0) return false;
-  // 同列且是铁路列
-  if(c1.g===c2.g && c1.col===c2.col && RAIL_COLS.includes(c1.col)){
-    return true;
-  }
-  // 同行且是铁路行
-  if(c1.g===c2.g && c1.row===c2.row && RAIL_ROWS.includes(c1.row)){
-    return true;
-  }
-  return false;
-}
-
-// ============ 游戏状态 ============
-let pieces = {};     // id → {player, rank}
+// ===== 构建棋盘 =====
+let cells = [];      // 所有格子
+let cellMap = {};    // id -> cell
+let adj = {};        // 邻接表
+let pieces = {};     // id -> piece
 let turn = 0;
-let selected = -1;
+let selected = null;
 let gameOver = false;
-let isRailMoving = false; // 工兵在铁路上移动状态
 
-// ============ 初始化 ============
-function startGame(){
-  pieces={}; selected=-1; turn=0; gameOver=false; isRailMoving=false;
-  for(let p=0; p<4; p++){
-    let pool = [];
-    for(const [rank, cnt] of INIT_COUNTS)
-      for(let i=0;i<cnt;i++) pool.push(rank);
-    // 洗牌
-    for(let i=pool.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      [pool[i],pool[j]]=[pool[j],pool[i]];
-    }
-    const zone = cells.filter(c=>c.g===p);
-    for(let i=0;i<pool.length && i<zone.length;i++)
-      pieces[zone[i].id] = {player:p, rank:pool[i]};
-  }
-  draw();
-  updateMsg(PE[0]+PN[0]+'方行棋');
+// 格子ID: player * 100 + row * 10 + col
+function makeId(player, row, col) {
+  return player * 100 + row * 10 + col;
 }
 
-function resetGame(){
-  pieces={}; selected=-1; gameOver=false; isRailMoving=false;
+// 创建所有格子
+function createBoard() {
+  cells = [];
+  cellMap = {};
+  adj = {};
+  
+  for (let p = 0; p < 4; p++) {
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 6; c++) {
+        const id = makeId(p, r, c);
+        const pos = getCellPos(p, r, c);
+        
+        // 判断格子类型
+        let type = 'normal';
+        if (CAMPS.some(([cr, cc]) => cr === r && cc === c)) type = 'camp';
+        if (HQS.some(([hr, hc]) => hr === r && hc === c)) type = 'hq';
+        
+        const cell = { id, player: p, row: r, col: c, x: pos.x, y: pos.y, type };
+        cells.push(cell);
+        cellMap[id] = cell;
+      }
+    }
+  }
+  
+  // 构建邻接关系
+  buildAdjacency();
+}
+
+// 构建邻接表
+function buildAdjacency() {
+  adj = {};
+  
+  // 每个格子连接相邻格子
+  for (const cell of cells) {
+    const { player, row, col } = cell;
+    const id = cell.id;
+    
+    if (!adj[id]) adj[id] = [];
+    
+    // 同区域内: 水平连接(col相邻)
+    if (col < 5) {
+      link(id, makeId(player, row, col + 1));
+    }
+    
+    // 同区域内: 垂直连接(row相邻)
+    if (row < 4) {
+      link(id, makeId(player, row + 1, col));
+    }
+    
+    // 行营对角连接
+    if (cell.type === 'camp') {
+      for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+        const nr = row + dr, nc = col + dc;
+        if (nr >= 0 && nr < 5 && nc >= 0 && nc < 6) {
+          link(id, makeId(player, nr, nc));
+        }
+      }
+    }
+  }
+  
+  // 铁路连接(横向铁路 row=0)
+  for (let p = 0; p < 4; p++) {
+    for (let c = 0; c < 5; c++) {
+      link(makeId(p, 0, c), makeId(p, 0, c + 1));
+    }
+  }
+  
+  // 铁路连接(纵向铁路 col=0 和 col=5)
+  for (let p = 0; p < 4; p++) {
+    for (let r = 0; r < 4; r++) {
+      link(makeId(p, r, 0), makeId(p, r + 1, 0));
+      link(makeId(p, r, 5), makeId(p, r + 1, 5));
+    }
+  }
+  
+  // 跨区域连接(四个角)
+  // 南(0) col0 ↔ 西(3) col5 的 row0
+  // 南(0) col5 ↔ 东(1) col0 的 row0
+  // 北(2) col0 ↔ 东(1) col5 的 row0  
+  // 北(2) col5 ↔ 西(3) col0 的 row0
+  const cornerLinks = [
+    [0, 0, 0, 3, 0, 5],  // 南左 ↔ 西右
+    [0, 0, 5, 1, 0, 0],  // 南右 ↔ 东左
+    [2, 0, 0, 1, 0, 5],  // 北左 ↔ 东右
+    [2, 0, 5, 3, 0, 0],  // 北右 ↔ 西左
+  ];
+  
+  for (const [p1, r1, c1, p2, r2, c2] of cornerLinks) {
+    link(makeId(p1, r1, c1), makeId(p2, r2, c2));
+  }
+}
+
+function link(a, b) {
+  if (!adj[a]) adj[a] = [];
+  if (!adj[b]) adj[b] = [];
+  if (!adj[a].includes(b)) adj[a].push(b);
+  if (!adj[b].includes(a)) adj[b].push(a);
+}
+
+// ===== 绘制 =====
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  
+  // 背景
+  ctx.fillStyle = '#161b22';
+  ctx.fillRect(0, 0, W, H);
+  
+  // 绘制格子
+  drawCells();
+  
+  // 绘制连接线
+  drawLines();
+  
+  // 绘制棋子
+  drawPieces();
+  
+  // 绘制选中状态
+  drawSelection();
+}
+
+function drawCells() {
+  for (const cell of cells) {
+    const { x, y, type, player } = cell;
+    
+    ctx.beginPath();
+    
+    if (type === 'camp') {
+      // 行营: 菱形
+      const s = U * 0.35;
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x + s, y);
+      ctx.lineTo(x, y + s);
+      ctx.lineTo(x - s, y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(60,150,60,0.4)';
+      ctx.fill();
+      ctx.strokeStyle = '#4caf50';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (type === 'hq') {
+      // 大本营: 矩形
+      const w = U * 0.7, h = U * 0.45;
+      ctx.rect(x - w/2, y - h/2, w, h);
+      ctx.fillStyle = 'rgba(255,200,0,0.35)';
+      ctx.fill();
+      ctx.strokeStyle = '#ffc107';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else {
+      // 普通格: 小圆点
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#3d4450';
+      ctx.fill();
+    }
+  }
+}
+
+function drawLines() {
+  ctx.strokeStyle = '#30363d';
+  ctx.lineWidth = 1;
+  
+  const drawn = new Set();
+  
+  for (const cell of cells) {
+    for (const neighborId of (adj[cell.id] || [])) {
+      const neighbor = cellMap[neighborId];
+      if (!neighbor) continue;
+      
+      const key = Math.min(cell.id, neighborId) + '_' + Math.max(cell.id, neighborId);
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      
+      ctx.beginPath();
+      ctx.moveTo(cell.x, cell.y);
+      ctx.lineTo(neighbor.x, neighbor.y);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawPieces() {
+  for (const cell of cells) {
+    const piece = pieces[cell.id];
+    if (!piece) continue;
+    
+    const { x, y } = cell;
+    const color = COLORS[piece.player];
+    const dark = DARKS[piece.player];
+    
+    // 棋子形状
+    const w = U * 0.75, h = U * 0.5;
+    
+    // 阴影
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(x + 2, y + h * 0.25, w * 0.4, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // 棋子主体
+    const grad = ctx.createLinearGradient(x - w/2, y - h/2, x + w/2, y + h/2);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, dark);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x - w/2, y - h/2, w, h, 4);
+    ctx.fill();
+    
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // 棋子文字
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${U * 0.28}px Microsoft YaHei`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(PIECE_NAMES[piece.rank], x, y);
+  }
+}
+
+function drawSelection() {
+  if (!selected) return;
+  
+  const cell = cellMap[selected];
+  if (!cell) return;
+  
+  // 选中光圈
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#ffd700';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(cell.x, cell.y, U * 0.45, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  // 可移动位置
+  const reach = getReachable(selected);
+  for (const tid of reach) {
+    const tc = cellMap[tid];
+    if (!tc) continue;
+    
+    const targetPiece = pieces[tid];
+    if (targetPiece) {
+      // 可攻击: 红色高亮
+      ctx.fillStyle = 'rgba(255,80,80,0.25)';
+    } else {
+      // 可移动: 黄色高亮
+      ctx.fillStyle = 'rgba(255,215,0,0.15)';
+    }
+    ctx.beginPath();
+    ctx.arc(tc.x, tc.y, U * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ===== 移动逻辑 =====
+function getReachable(fromId) {
+  const piece = pieces[fromId];
+  if (!piece) return [];
+  
+  const cell = cellMap[fromId];
+  if (!cell) return [];
+  
+  const reach = [];
+  const isWorker = piece.rank === 2; // 工兵
+  
+  // 遍历所有邻接格子
+  for (const neighborId of (adj[fromId] || [])) {
+    const neighbor = cellMap[neighborId];
+    if (!neighbor) continue;
+    
+    const targetPiece = pieces[neighborId];
+    
+    // 不能移动到盟友的位置
+    if (targetPiece && TEAMS[targetPiece.player] === TEAMS[piece.player]) {
+      continue;
+    }
+    
+    // 不能移动到敌方棋子的位置(除非攻击)
+    if (targetPiece) {
+      reach.push(neighborId);
+      continue; // 有棋子就停，不能穿过
+    }
+    
+    // 没有棋子，可以移动
+    reach.push(neighborId);
+    
+    // 工兵在铁路上可以继续飞
+    if (isWorker && isRailway(cell, neighbor)) {
+      // BFS继续搜索铁路上的空格
+      const visited = new Set([fromId, neighborId]);
+      const queue = [neighborId];
+      
+      while (queue.length > 0) {
+        const curId = queue.shift();
+        const curCell = cellMap[curId];
+        
+        for (const nextId of (adj[curId] || [])) {
+          if (visited.has(nextId)) continue;
+          
+          const nextCell = cellMap[nextId];
+          if (!nextCell) continue;
+          
+          // 必须在铁路上
+          if (!isRailway(curCell, nextCell)) continue;
+          
+          visited.add(nextId);
+          
+          const nextPiece = pieces[nextId];
+          if (nextPiece) {
+            // 有棋子：可以攻击但不能穿过
+            if (TEAMS[nextPiece.player] !== TEAMS[piece.player]) {
+              reach.push(nextId);
+            }
+            // 不管能不能攻击，都不能继续穿过
+          } else {
+            // 空格：可以移动并继续
+            reach.push(nextId);
+            queue.push(nextId);
+          }
+        }
+      }
+    }
+  }
+  
+  return reach;
+}
+
+function isRailway(cell1, cell2) {
+  // 两格都在铁路上才算铁路移动
+  const onRail1 = RAIL_COL.includes(cell1.col) || RAIL_ROW.includes(cell1.row);
+  const onRail2 = RAIL_COL.includes(cell2.col) || RAIL_ROW.includes(cell2.row);
+  return onRail1 && onRail2 && cell1.player === cell2.player;
+}
+
+// ===== 吃子判定 =====
+function resolveCombat(attacker, defender) {
+  const r1 = attacker.rank;
+  const r2 = defender.rank;
+  
+  // 炸弹：同归于尽
+  if (r1 === 0 || r2 === 0) return 'draw';
+  
+  // 地雷：只有工兵能排
+  if (r2 === 1) {
+    return r1 === 2 ? 'win' : 'lose';
+  }
+  
+  // 军旗：直接获胜
+  if (r2 === 11) return 'flag';
+  
+  // 大吃小
+  if (r1 > r2) return 'win';
+  if (r1 < r2) return 'lose';
+  
+  // 同级：同归于尽
+  return 'draw';
+}
+
+// ===== 胜负判定 =====
+function checkGameOver() {
+  // 检查军旗是否被扛
+  for (const cellId of Object.keys(pieces)) {
+    const piece = pieces[cellId];
+    if (piece.rank === 11) {
+      // 军旗还在，游戏继续
+      return null;
+    }
+  }
+  
+  // 所有军旗都没了，看哪方还有棋子
+  for (let team = 0; team < 2; team++) {
+    const hasPiece = Object.values(pieces).some(p => TEAMS[p.player] === team);
+    if (!hasPiece) {
+      // 这个团队输了
+      const winnerTeam = 1 - team;
+      const winner = Object.values(pieces).find(p => TEAMS[p.player] === winnerTeam);
+      return { winner: winner.player, reason: 'flag' };
+    }
+  }
+  
+  return null;
+}
+
+// ===== 游戏控制 =====
+function startGame() {
+  pieces = {};
+  turn = 0;
+  selected = null;
+  gameOver = false;
+  
+  createBoard();
+  
+  // 初始化棋子(随机布阵)
+  for (let p = 0; p < 4; p++) {
+    let pool = [];
+    for (const cfg of PIECE_CONFIG) {
+      for (let i = 0; i < cfg.count; i++) {
+        pool.push({ rank: cfg.rank, player: p });
+      }
+    }
+    
+    // 洗牌
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    
+    // 按格子顺序放置
+    const zoneCells = cells.filter(c => c.player === p);
+    for (let i = 0; i < pool.length && i < zoneCells.length; i++) {
+      pieces[zoneCells[i].id] = pool[i];
+    }
+  }
+  
+  draw();
+  updateMsg(EMOJI[turn] + NAMES[turn] + '方行棋');
+}
+
+function resetGame() {
+  pieces = {};
+  selected = null;
+  gameOver = false;
+  createBoard();
   draw();
   updateMsg('点击「开局」开始');
 }
 
-function updateMsg(t){ document.getElementById('msg').textContent = t; }
-
-// ============ 绘制 ============
-function draw(){
-  ctx.clearRect(0,0,W,H);
-  // 背景
-  const bg = ctx.createRadialGradient(CX,CY,20,CX,CY,W*0.72);
-  bg.addColorStop(0,'#142814');
-  bg.addColorStop(1,'#080f08');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0,0,W,H);
-  drawRailways();
-  drawAllLines();
-  drawCellShapes();
-  drawPieces();
-  drawHighlight();
-  drawTags();
+function updateMsg(text) {
+  document.getElementById('msg').textContent = text;
 }
 
-function drawRailways(){
-  ctx.save();
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#7a5a10';
-  ctx.shadowColor = '#7a5a10';
-  ctx.shadowBlur = 2;
-  // 铁路: 外列(0,4)和外行(0,4)
-  for(let g=0; g<4; g++){
-    // 铁路列
-    for(let r=0; r<4; r++){
-      const [x1,y1]=pos(g,r,0), [x2,y2]=pos(g,r+1,0);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-      const [x3,y3]=pos(g,r,4), [x4,y4]=pos(g,r+1,4);
-      ctx.beginPath(); ctx.moveTo(x3,y3); ctx.lineTo(x4,y4); ctx.stroke();
-    }
-    // 铁路行
-    for(let c=0; c<4; c++){
-      const [x1,y1]=pos(g,0,c), [x2,y2]=pos(g,0,c+1);
-      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-      const [x3,y3]=pos(g,4,c), [x4,y4]=pos(g,4,c+1);
-      ctx.beginPath(); ctx.moveTo(x3,y3); ctx.lineTo(x4,y4); ctx.stroke();
+// ===== 点击交互 =====
+canvas.addEventListener('click', (e) => {
+  if (gameOver) return;
+  if (Object.keys(pieces).length === 0) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (W / rect.width);
+  const my = (e.clientY - rect.top) * (H / rect.height);
+  
+  // 找最近的格子
+  let bestCell = null;
+  let minDist = Infinity;
+  
+  for (const cell of cells) {
+    const dist = Math.hypot(mx - cell.x, my - cell.y);
+    if (dist < minDist && dist < U * 0.6) {
+      minDist = dist;
+      bestCell = cell;
     }
   }
-  ctx.restore();
-}
-
-function drawAllLines(){
-  const drawn = new Set();
-  ctx.lineWidth = 1.0;
-  for(const cl of cells){
-    if(cl.g<0||cl.g>=4) continue;
-    for(const tid of (adj[cl.id]||[])){
-      if(tid===CENTER_ID) continue; // 中心单独画
-      if(tid>900) continue;
-      const tc = cellMap[tid];
-      if(!tc || tc.g<0||tc.g>=4) continue;
-      // 避免重复画
-      const key = Math.min(cl.id,tid)+'_'+Math.max(cl.id,tid);
-      if(drawn.has(key)) continue;
-      drawn.add(key);
-      const rail = isRailAdj(cl.id, tid);
-      ctx.strokeStyle = rail ? '#6a5010' : '#2d4a28';
-      ctx.lineWidth = rail ? 1.5 : 0.8;
-      ctx.beginPath(); ctx.moveTo(cl.px,cl.py); ctx.lineTo(tc.px,tc.py); ctx.stroke();
+  
+  if (!bestCell) return;
+  
+  const clickedId = bestCell.id;
+  const clickedPiece = pieces[clickedId];
+  
+  if (!selected) {
+    // 选择棋子
+    if (clickedPiece && clickedPiece.player === turn) {
+      selected = clickedId;
+      draw();
     }
-  }
-  // 中心连接线
-  ctx.strokeStyle = '#4a3810';
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4,3]);
-  for(let g=0;g<4;g++){
-    const cid = findCellByPos(g,0,2);
-    if(cid>0){
-      const tc=cellMap[cid];
-      if(tc){ctx.beginPath();ctx.moveTo(CX,CY);ctx.lineTo(tc.px,tc.py);ctx.stroke();}
-    }
-  }
-  ctx.setLineDash([]);
-  // 角落连接线
-  ctx.strokeStyle = '#3a5a18';
-  ctx.lineWidth = 1.2;
-  for(const [g1,r1,c1,g2,r2,c2] of cornerPairs){
-    const id1=findCellByPos(g1,r1,c1), id2=findCellByPos(g2,r2,c2);
-    if(id1>0&&id2>0){
-      const c1=cellMap[id1],c2=cellMap[id2];
-      if(c1&&c2){ctx.beginPath();ctx.moveTo(c1.px,c1.py);ctx.lineTo(c2.px,c2.py);ctx.stroke();}
-    }
-  }
-}
-
-function drawCellShapes(){
-  for(const cl of cells){
-    if(cl.g<0||cl.g>=4) continue;
-    const {px,py,type}=cl;
-    if(type==='C'){
-      // 菱形行营
-      ctx.fillStyle='rgba(30,110,40,0.55)';
-      const s=U*0.4;
-      ctx.beginPath();
-      ctx.moveTo(px,py-s); ctx.lineTo(px+s,py);
-      ctx.lineTo(px,py+s); ctx.lineTo(px-s,py);
-      ctx.closePath(); ctx.fill();
-      ctx.strokeStyle='#1e7a2e'; ctx.lineWidth=1.5; ctx.stroke();
-    } else if(type==='H'){
-      // 矩形大本营
-      ctx.fillStyle='rgba(200,140,10,0.45)';
-      ctx.beginPath(); ctx.roundRect(px-U*0.42,py-U*0.28,U*0.84,U*0.56,3);
-      ctx.fill();
-      ctx.strokeStyle='#c88a00'; ctx.lineWidth=1.8; ctx.stroke();
-    } else {
-      // 普通格: 小点
-      ctx.fillStyle='#2a4a2a';
-      ctx.beginPath(); ctx.arc(px,py,U*0.14,0,Math.PI*2); ctx.fill();
-    }
-  }
-  // 中心
-  ctx.fillStyle='rgba(220,100,20,0.65)';
-  ctx.beginPath(); ctx.arc(CX,CY,U*0.38,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#d46010'; ctx.lineWidth=2; ctx.stroke();
-  ctx.fillStyle='#fff8';
-  ctx.font=`bold ${U*0.28}px Microsoft YaHei`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('中',CX,CY);
-}
-
-function drawPieces(){
-  for(const cl of cells){
-    const p = pieces[cl.id];
-    if(!p) continue;
-    drawOnePiece(cl.px, cl.py, p);
-  }
-}
-
-function drawOnePiece(px, py, p){
-  const col=PC[p.player], dk=PD[p.player];
-  const pw=U*0.80, ph=U*0.52;
-  // 阴影
-  ctx.fillStyle='rgba(0,0,0,0.35)';
-  ctx.beginPath(); ctx.ellipse(px+2, py+ph*0.3, pw*0.45, ph*0.16, 0,0,Math.PI*2); ctx.fill();
-  // 主体
-  const g=ctx.createLinearGradient(px-pw/2,py-ph/2,px+pw/2,py+ph/2);
-  g.addColorStop(0,col); g.addColorStop(1,dk);
-  ctx.fillStyle=g;
-  ctx.beginPath(); ctx.roundRect(px-pw/2,py-ph/2,pw,ph,5); ctx.fill();
-  ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1; ctx.stroke();
-  // 文字
-  const txt=RN[p.rank];
-  ctx.fillStyle='#fff';
-  ctx.font=`bold ${U*0.26}px Microsoft YaHei`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(txt, px, py+1);
-}
-
-function drawHighlight(){
-  if(selected<0) return;
-  const cl=cellMap[selected];
-  if(!cl) return;
-  // 选中光圈
-  ctx.strokeStyle='#ffd700'; ctx.lineWidth=3;
-  ctx.shadowColor='#ffd700'; ctx.shadowBlur=12;
-  ctx.beginPath(); ctx.arc(cl.px,cl.py,U*0.52,0,Math.PI*2); ctx.stroke();
-  ctx.shadowBlur=0;
-  // 可达位置
-  const reach = getReachable(selected);
-  for(const tid of reach){
-    if(tid===CENTER_ID) continue;
-    const tc=cellMap[tid];
-    if(!tc) continue;
-    const tp=pieces[tid];
-    if(tp && TEAM[tp.player]===TEAM[pieces[selected]?.player]) continue;
-    ctx.fillStyle=tp ? 'rgba(255,80,60,0.25)' : 'rgba(255,215,0,0.15)';
-    ctx.beginPath(); ctx.arc(tc.px,tc.py,U*0.34,0,Math.PI*2); ctx.fill();
-  }
-}
-
-function drawTags(){
-  const el=document.getElementById('tags');
-  let h='';
-  for(let i=0;i<4;i++){
-    const alive=Object.values(pieces).some(p=>p.player===i);
-    const on=i===turn;
-    const style=`background:${PC[i]};${on?'opacity:1;box-shadow:0 0 8px '+PC[i]+';':''}`;
-    h+=`<span class="ptag${on?' on':''}" style="${style}">${PE[i]}${PN[i]}</span>`;
-  }
-  el.innerHTML=h;
-}
-
-// ============ 移动可达性 ============
-function getReachable(fromId){
-  const sp=pieces[fromId];
-  if(!sp) return [];
-  const reach=new Set();
-  const q=[fromId];
-  const vis=new Set([fromId]);
-  const isWorker=sp.rank===2;
-
-  while(q.length){
-    const cur=q.shift();
-    for(const nxt of (adj[cur]||[])){
-      if(vis.has(nxt)) continue;
-      // 吃子限制
-      const np=pieces[nxt];
-      if(np && TEAM[np.player]===TEAM[sp.player]) continue; // 不走盟友格
-      // 地雷限制(非工兵不能进camp区)
-      // 普通子走一步
-      reach.add(nxt);
-      vis.add(nxt);
-      if(isWorker && isRailAdj(cur,nxt)){
-        // 工兵走铁路: 继续深入
-        q.push(nxt);
-      }
-    }
-  }
-  return [...reach];
-}
-
-// ============ 吃子规则 ============
-function resolve(sp, tp){
-  const r1=sp.rank, r2=tp.rank;
-  // 炸弹: 与任何子同归
-  if(r1===0||r2===0) return 'draw';
-  // 地雷: 只有工兵能排
-  if(r2===1) return r1===2 ? 'win' : 'lose';
-  // 军旗: 直接扛旗获胜
-  if(r2===11) return 'flag';
-  // 大吃小
-  if(r1>r2) return 'win';
-  if(r1<r2) return 'lose';
-  return 'draw'; // 同级
-}
-
-// ============ 胜负检查 ============
-function checkVictory(movedPlayer, result){
-  if(result==='flag'){ return {winner:movedPlayer, reason:'flag'}; }
-  // 检查有无全灭
-  for(let i=0;i<4;i++){
-    if(Object.values(pieces).some(p=>p.player===i)) continue;
-    // 被全灭: 找还在的玩家
-    for(let j=0;j<4;j++){
-      if(Object.values(pieces).some(p=>p.player===j)) return {winner:j, reason:'eliminated'};
-    }
-    return {winner:-1, reason:'all_dead'};
-  }
-  return null;
-}
-
-// ============ 点击交互 ============
-cv.addEventListener('click', e=>{
-  if(gameOver || !Object.keys(pieces).length) return;
-  const rect=cv.getBoundingClientRect();
-  const mx=(e.clientX-rect.left)*(W/rect.width);
-  const my=(e.clientY-rect.top)*(H/rect.height);
-
-  // 找最近格子
-  let best=-1, bd=Infinity;
-  for(const cl of cells){
-    if(cl.g<0||cl.g>=4) continue;
-    const d=Math.hypot(mx-cl.px,my-cl.py);
-    if(d<bd){bd=d;best=cl.id;}
-  }
-  if(bd>U*0.72) return;
-
-  if(selected<0){
-    // 选子
-    const p=pieces[best];
-    if(p && p.player===turn){ selected=best; draw(); }
-    return;
-  }
-
-  // 点击已选棋子: 取消选中
-  if(best===selected){ selected=-1; draw(); return; }
-
-  const sp=pieces[selected];
-  if(!sp){ selected=-1; draw(); return; }
-
-  const reach=getReachable(selected);
-  if(!reach.includes(best)){
-    // 点到不可达格: 重新选子
-    const p=pieces[best];
-    if(p && p.player===turn){ selected=best; draw(); }
-    else { selected=-1; draw(); }
-    return;
-  }
-
-  const tp=pieces[best];
-  let result, winner=null;
-
-  if(!tp){
-    pieces[best]=sp; delete pieces[selected];
-    result='move';
   } else {
-    const r=resolve(sp,tp);
-    if(r==='win'){
-      pieces[best]=sp; delete pieces[selected];
-      result='capture';
-    } else if(r==='lose'){
-      delete pieces[selected];
-      result='killed';
-    } else {
-      delete pieces[selected]; delete pieces[best];
-      result='draw';
+    // 已有选中
+    
+    if (clickedId === selected) {
+      // 点击自己：取消选中
+      selected = null;
+      draw();
+      return;
     }
-  }
-
-  // 胜负检查
-  const vig=checkVictory(sp.player, result==='flag'?result:(result==='win'||result==='move'||result==='capture'?sp.player:-1));
-  if(vig){
-    gameOver=true;
-    selected=-1;
-    if(vig.reason==='flag'){
-      updateMsg(PE[vig.winner]+PN[vig.winner]+'扛旗获胜！');
-    } else {
-      const teammate=[0,1,2,3].find(t=>t!==vig.winner && TEAM[t]===TEAM[vig.winner] && Object.values(pieces).some(p=>p.player===t));
-      if(teammate!==undefined){
-        updateMsg(PE[teammate]+PN[teammate]+'和'+PE[vig.winner]+PN[vig.winner]+'联盟获胜！');
+    
+    const reach = getReachable(selected);
+    
+    if (!reach.includes(clickedId)) {
+      // 不可达：重新选择
+      if (clickedPiece && clickedPiece.player === turn) {
+        selected = clickedId;
+        draw();
       } else {
-        updateMsg(PE[vig.winner]+PN[vig.winner]+'获胜！');
+        selected = null;
+        draw();
+      }
+      return;
+    }
+    
+    // 移动/攻击
+    const attacker = pieces[selected];
+    const defender = pieces[clickedId];
+    
+    if (!defender) {
+      // 移动到空格
+      pieces[clickedId] = attacker;
+      delete pieces[selected];
+    } else {
+      // 攻击
+      const result = resolveCombat(attacker, defender);
+      
+      if (result === 'win' || result === 'flag') {
+        // 赢了：占领位置
+        pieces[clickedId] = attacker;
+        delete pieces[selected];
+        
+        if (result === 'flag') {
+          gameOver = true;
+          updateMsg(EMOJI[turn] + NAMES[turn] + '扛旗获胜！');
+          draw();
+          return;
+        }
+      } else if (result === 'lose') {
+        // 输了：被吃
+        delete pieces[selected];
+      } else {
+        // 同归于尽
+        delete pieces[selected];
+        delete pieces[clickedId];
       }
     }
-    draw(); return;
-  }
-
-  // 换人
-  selected=-1;
-  if(!gameOver){
-    turn=(turn+1)%4;
-    let tries=0;
-    while(tries<4){
-      if(Object.values(pieces).some(p=>p.player===turn)) break;
-      turn=(turn+1)%4; tries++;
+    
+    selected = null;
+    
+    // 检查胜负
+    const victory = checkGameOver();
+    if (victory) {
+      gameOver = true;
+      updateMsg(EMOJI[victory.winner] + NAMES[victory.winner] + '获胜！');
+      draw();
+      return;
     }
-    updateMsg(PE[turn]+PN[turn]+'方行棋');
+    
+    // 换人
+    for (let i = 0; i < 4; i++) {
+      turn = (turn + 1) % 4;
+      if (Object.values(pieces).some(p => p.player === turn)) {
+        break;
+      }
+    }
+    
+    updateMsg(EMOJI[turn] + NAMES[turn] + '方行棋');
+    draw();
   }
-  draw();
 });
 
-// ============ 启动 ============
+// ===== 启动 =====
+createBoard();
 draw();
-updateMsg('点击「开局」开始游戏');
 </script>
 </body>
 </html>
